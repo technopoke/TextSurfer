@@ -5,7 +5,7 @@
 """
 
 import warnings, re
-
+from nltk.corpus import stopwords
 import pandas as pd
 
 
@@ -23,12 +23,17 @@ class temprary():
         # TODO: insert the STOPWORDS initialisation.
 
 
+
+
+
 # behaviour
-class word_cleaner():
+class PhraseStore():
 
-    def __init__(self, wordset=None, behaviour=None):
-        self.behaviour = 'stop' # 'stop', 'swap', 'join'
-
+    def __init__(self, change_phrases=None):
+        self._word_list = pd.DataFrame(columns=['Target', 'Replace', 'Active', 'Deleted'])
+        if change_phrases is not None:
+            self.add(change_phrases)
+            
         # stop just needs the word to remove (even if join word) tuple = (word,'')
         # -
         # swap needs a [list] to swap with a [list] e.g. (['AB'],['A','B']),  (['A','B'],['C','D']),
@@ -40,11 +45,152 @@ class word_cleaner():
         # If is a tuple with single list item with multiple strings, assume is join: (['A','B','C']) -> (['A','B','C'])
         # IF is a tupel with two items, ether of which, is a string, then
 
+    def convert(self, change_phrases=None):
+        """
+            Default is that assumes it is a list of yuples
+        :param change_phrases:
+        :return:
+        """
+        if isinstance(change_phrases, list):
+            if len(change_phrases) < 1:
+                warnings.warn("No values added")
+            elif isinstance(change_phrases[0], tuple):
+                change_phrases = [self.convert(each) for each in change_phrases]                              # If list of tuples, check indevidual types
+            elif isinstance(change_phrases[0], str):
+                change_phrases = self._list_convert(change_phrases)
+
+        elif isinstance(change_phrases, str):
+            change_phrases = (change_phrases, '') # Default single string, is a stop word (nothign to exchange)
+        elif isinstance(change_phrases, tuple):
+            if isinstance(change_phrases[0], str):
+                change_phrases = (change_phrases,'_'.join(change_phrases))
+            elif isinstance(change_phrases[0], list):
+                pass
+
+        return change_phrases
+
+    """ 
+    if a list of strings, then it is a list of stop words
+    if it is a list of tuples then it is a swap word (join words and stopwrods included)
+    if it is a tuple of strings, it is a join word 
+    if it is a tuple of lists, it is a swap word.
+    """
+
+    def _list_convert(self, change_phrases):
+        return [(each,'') for each in change_phrases]
+
+    def add(self, change_phrase=None, active=True):
+        """
+            Adds a change_phrase or set of change_phrases to the internal table
+
+        :param change_phrase:
+        :return:
+        """
+        change_phrase = self.convert(change_phrase)
+        if isinstance(change_phrase, list):
+            for each in change_phrase:
+                self._word_list.loc[len(self._word_list)] = {'Target': each[0],
+                                                             'Replace': each[1],
+                                                             'Active': active,
+                                                             'Deleted': False}
+        else:
+            self._word_list.loc[len(self._word_list)] = {'Target': change_phrase[0],
+                                                         'Replace': change_phrase[1],
+                                                         'Active': active,
+                                                         'Deleted': False}
+
+        if len(self._word_list) > 1:
+            self._word_list = self._word_list.drop_duplicates()
+
+    def remove(self, change_phrase=None):
+        if not isinstance(change_phrase,int):
+            change_phrase = self.id(change_phrase)
+
+        self._word_list.drop(change_phrase)
+
+    def id(self, change_phrase):
+        if isinstance(change_phrase,int):
+            return change_phrase
+        else:
+            return self._word_list.index[self._word_list['Target']==change_phrase].tolist()[0]
+
+    def edit(self, change_phrase=None, value=None, column='Active'):
+        if change_phrase is None:
+            if value is None:
+                return list(self._word_list[column])
+            else:
+                self._word_list[column] = value
+        else:
+            if not isinstance(change_phrase, int):
+                change_phrase = self.id(change_phrase)
+            if value is None:
+                return self._word_list.loc[column,change_phrase]
+            else:
+                self._word_list.loc[column,change_phrase] = value
+
+    def delete(self, change_phrase=None):
+        if change_phrase is None:
+            warnings.warn("Need to define Words to delete")
+        else:
+            self.edit(change_phrase=change_phrase,value=True,column='Deleted')
+
+    def status(self, change_phrase=None, active=True):
+        self.edit(change_phrase=change_phrase,value=active,column='Active')
+
+    def toggle(self, change_phrase=None):
+        value = not self.edit(change_phrase=change_phrase, value=None, column='Active')
+        self.edit(change_phrase=change_phrase,value=value, column='Active')
+        
+    def words(self):
+        return self.edit(change_phrase=None, value=None, column='Target')
+    
+    def as_table(self):
+        return self._word_list
+    
+    def as_tuples(self):
+        return [(self._word_list.loc[item,each] for item in self._word_list.columns ) for each in self._word_list.index]
+
+
+class PhraseCleaner(PhraseStore):
+
+    def __init__(self, change_phrases=None):
+        super(PhraseCleaner, self).__init__(change_phrases=change_phrases)
+        
     def __call__(self, text=None):
         if text is None:
             return self._word_list
         else:
-            return wswaper.remove_words(text, self._word_list)
+            return self.clean_text(text)
+        
+    def valid_tuples(self):
+        return[(self._word_list.loc[id,'Target'],self._word_list.loc[id,'Replace'])
+         for id in self._word_list.index()
+         if (self._word_list.loc[id,'Active'] and not self._word_list.loc[id,'Deleted'])]
+
+    def clean_text(self, text):
+        local = self.valid_tuples()
+        return wswaper.change_phrases(text,local)
+
+
+
+
+    
+
+    """ 
+    List manipulation
+        add (single)
+        add (block)
+        delete (single)
+        set (
+    
+    Status manipulation
+        state
+    Save and load status. 
+    
+    
+    """
+
+    """
 
     # self._word_list.append(tuple(join.split())) TODO: joinword, split from string.
     def add(self, wordset=None):
@@ -78,12 +224,18 @@ class word_cleaner():
 
     def reset(self):
         self._word_list = []
+"""
+
+class Stopwords(PhraseCleaner):
+    def __init__(self, change_phrases=None):
+        super(Stopwords, self).__init__(change_phrases=change_phrases)
+
 
 
 class wswaper():
 
     @staticmethod
-    def swap_phrase(text, swap):
+    def change_phrase(text, swap):
         # Swaps a single phrase (set of words) for another phrase.
         # Text: is either a string, or a list of words
         # target: is a phrase (ordered list of words) to be replaced in the text
@@ -148,14 +300,14 @@ class wswaper():
                     i += 1
             return out_text
 
-    def swap_phrases(self, text, swaps):
+    def change_phrases(self, text, swaps):
         for swap in swaps:
-            text = self.swap_phrase(text, swap)
+            text = self.change_phrase(text, swap)
         return text
 
     def remove_phrases(self, text, targets):
         for target in targets:
-            text = self.swap_phrase(text, target, [])
+            text = self.change_phrase(text, target, [])
 
     def remove_words(self, text, word_list, invert=False):
         """
@@ -187,4 +339,28 @@ class wswaper():
 
 
 
+if __name__ == '__main__':
+
+    join_word_list = [('social', 'media'), ('et', 'al'), ('google', 'scholar'), ('big', 'data'), ('web', 'science'),
+                      ('science', 'google'),
+                      ('crossref', 'google'), ('machine', 'learning'), ('new', 'york'), ('african', 'american'),
+                      ('united', 'states'), ('crossref', 'web'),
+                      ('data',
+                       'collection')]
+
+    swap_word_list = [(['bd'], ['big', 'data'])]
+
+    wordsets = {}
+    wordsets['stops'] = PhraseCleaner(stopwords.words('english'))
+    wordsets['joins'] = PhraseCleaner(join_word_list)
+    wordsets['swaps'] = PhraseCleaner(swap_word_list)
+
+    print(wordsets['stops'])
+
+    """ 
+    if a list of strings, then it is a list of stop words
+    if it is a list of tuples then it is a swap word (join words and stopwrods included)
+    if it is a tuple of strings, it is a join word 
+    if it is a tuple of lists, it is a swap word.
+    """
 
