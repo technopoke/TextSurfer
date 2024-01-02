@@ -1,4 +1,5 @@
 import warnings
+import pandas as pd
 
 
 class ModelScores(object):
@@ -16,7 +17,7 @@ class ModelScores(object):
 
     """
     # INTERNAL VARIABLES
-    _SCORES = {}   # TODO CONVERT TO pd.DataFrame. AFTER BRANCHING from working Dict Funcitons.
+    _SCORES = pd.DataFrame()
 
     def __init__(self, item=None, **kwargs):
         """
@@ -36,6 +37,54 @@ class ModelScores(object):
     """
     ------------------------------- ACCESS ENTRY ------------------------------------------
     """
+
+    def _clean_index(self, input=None):
+        """
+            INTERNAL funciton: _clean_index cleans the value of the tuple (GROUPNAME, TOPIC) to prevent erros in the
+            existing Data Frame Access
+        :param input: A tuple, array, string or None, defautl None
+        :return: a tuple of (GROUPNAME, TOPIC) that are valid for the internal dataframe _SCORE
+
+        NOTES
+            -- If an array, it is treated as for a tuple.
+            -- If None, is treated as tuple ('-',None)
+            -- If a string, it is treated as the group name, i.e. (input, None)
+            -- If tuple is longer than 2 entries, it is truncated.
+            -- If a two item tuple, is treated as (GROUPNAME, TOPIC) with following approched.
+                -- If GROUPNAME is NONE, GROUPNAME is '-'
+                -- If TOPIC is NONE, TOPIC is the length of GROUPNAME as a string with Group Name
+            -- Use array internally to
+        """
+
+        # Convert all non tuple types to tuple
+        if input is None:
+            input = [None, None]
+        elif isinstance(input, str):
+            input = [input, None]
+        elif isinstance(input, tuple):
+            input = list(input)
+        else:
+            warnings.warn("Input index format not recognised.")
+            return None
+
+        # Check length of new tuple
+        if len(input) < 1:
+            input = [None, None]
+        elif len(input) < 2:
+            input = [input[0], None]
+        elif len(input) > 2:
+            input = input[0:2]
+
+        # Check the Group INdex value
+        input[0] = '-' if input[0] is None else input[0]
+
+        # Check the Topic Name for the group
+        input[1] = len(self._SCORES.index) if input[1] is None else input[1]
+
+        return tuple(input)
+
+
+
 
     def add(self, group=None, topic=None, value=0):
         """
