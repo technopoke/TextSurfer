@@ -16,7 +16,7 @@ class ModelScores(object):
 
     """
     # INTERNAL VARIABLES
-    _SCORES = {}
+    _SCORES = {}   # TODO CONVERT TO pd.DataFrame. AFTER BRANCHING from working Dict Funcitons.
 
     def __init__(self, item=None, **kwargs):
         """
@@ -115,6 +115,42 @@ class ModelScores(object):
             # if group doesn't exist, return nothing.
             warnings.warn('No Score by group %s' % (group))
             return None
+
+    def search(self, term=None, groups=False):
+        """
+            SEARCH looks for any scores that have the given term in the GROUPNAME or TOPIC.
+
+            :param term: String or None, default None
+                if a string, returns a dictionary of dictionaries of scores, split by group and topic.
+            :param groups: Boolean, (True or False), default False.
+                if False, looks for all topics with term in it. When groups is true, looks at GROUPNAMES only
+
+            :return: dictionary of dictionaries of scores, split by group and topic.
+        """
+
+        # Initialise output as empty
+        out_scores = {}
+
+        if term is not None:
+            # If there is a search terms
+            for group in self._SCORES.keys():
+                # Search through each of groups
+                if groups:
+                    # If looking for groups with term
+                    if term in group:
+                        out_scores[group] = self._SCORES[group].copy()  #TODO: WHY COPY?
+                else:
+                    # If looking for topics with term, create a temporary group with such topics in it.
+                    sub_set = {}
+                    for name in self._SCORES[group].keys():
+                        if term in name:
+                            sub_set[group] = self._SCORES[group][name]
+                    out_scores[group] = sub_set
+        else:
+            # If no terms, return the whole dictionary
+            out_scores = self._SCORES
+
+        return out_scores
 
     def score(self, group=None, topic=None, value=None):
         """
